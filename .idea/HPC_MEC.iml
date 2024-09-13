@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/ratio9_lap10_2024-09-09-12" />
+      <excludeFolder url="file://$MODULE_DIR$/ratio9_lap5_2024-09-09-18" />
+      <excludeFolder url="file://$MODULE_DIR$/ratio9_lap5_2024-09-10-10" />
+      <excludeFolder url="file://$MODULE_DIR$/ratio9_lap5_2024-09-11-11" />
+    </content>
+    <orderEntry type="jdk" jdkName="Remote Python 3.10.14 (sftp://ltt@47.95.205.247:22/home/ltt/.conda/envs/brainMap/bin/python3.10) (2)" jdkType="Python SDK" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
