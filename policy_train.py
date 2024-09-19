@@ -33,6 +33,7 @@ class CachedGridCode:
 
     def get_grid_code(self, pos):
         loc_sim = np.linalg.norm(self.locs - pos, axis=1)
+        print(f"pos {pos} close to {self.locs[np.argmin(loc_sim)]}")
         g_code = self.u_mecs[np.argmin(loc_sim)]
         return g_code
 
@@ -188,7 +189,7 @@ def test(grid_code_cache=None, policy=None, test_step_num=10000):
         state = state.transpose(1, 0).reshape(1, config.num_mec_module, config.num_mec* config.num_mec)
         action, logp, entropy, value = policy.get_actions(state, train=False)
         loc, fea, reward, done, v_vec = env.step(action.item(), v_abs=v_abs)
-        # print("step ", i, "loc=", env.agent_pos, env.goal_pos, reward)
+        print("step ", i, "loc=", env.agent_pos, grid_code_now[:5, 0])
         test_traj.append(loc.copy())
         total_reward += reward
         grid_code_now = grid_code_cache.get_grid_code(env.agent_pos)
@@ -218,5 +219,5 @@ def test(grid_code_cache=None, policy=None, test_step_num=10000):
 
 if __name__ == '__main__':
     map_model_ckpt_path = "./ratio9_lap5_2024-09-11-11/Coupled_Model_2.bp"
-    test(test_step_num=1000)
+    test(test_step_num=500)
     # train(policy_ckpt=False)

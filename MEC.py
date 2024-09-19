@@ -6,7 +6,7 @@ import jax
 
 class Grid_2D(bp.DynamicalSystem):
     def __init__(self, ratio, angle, strength, config=None, tau=1., tau_v=10., mbar=1.,
-                 k=1., A=10., J0=1., x_min=-bm.pi, x_max=bm.pi):
+                 k=1., A=3., J0=1., x_min=-bm.pi, x_max=bm.pi):
         # num=num_mec, spike_num=spike_num_grid, num_hpc=num_exc,
         #  tau=1., tau_v=10., mbar=1., tau_e=tau_e,k=1., tau_W_in=tau_W_in,
         # norm_fac = norm_fac, tau_W_out=tau_W_mec, lr_out= lr_mec_out, lr_in=lr_mec_in,
@@ -119,9 +119,10 @@ class Grid_2D(bp.DynamicalSystem):
         d = self.dist(bm.asarray(Phase) - self.value_grid)
         return self.A * bm.exp(-0.25 * bm.square(d / self.a))
 
-    def get_stimulus_by_motion(self, velocity):
+    def get_stimulus_by_motion(self, velocity, noise_stre=0.0):
         # integrate self motion
-        noise_v = bm.random.randn(1) * 0.
+        noise_v = bm.random.randn(1) * noise_stre  # 1/10的噪音速度
+        velocity = velocity + noise_v
         v_rot = bm.matmul(self.rot, velocity)
         v_phase = bm.matmul(self.coor_transform, v_rot * self.ratio)
         dis_phase = self.circle_period(self.center - self.phase_estimate)
@@ -143,6 +144,16 @@ class Grid_2D(bp.DynamicalSystem):
         self.center[1] = bm.angle(bm.sum(exppos_y * r))
         self.centerI[0] = bm.angle(bm.sum(exppos_x * self.input))
         self.centerI[1] = bm.angle(bm.sum(exppos_y * self.input))
+    @staticmethod
+    def get_center_tmp(input_hpc):
+        x_grid, y_grid = bm.meshgrid(bm.linspace(-bm.pi, bm.pi, 10, endpoint=False), bm.linspace(-bm.pi, bm.pi, 10, endpoint=False))
+        exppos_x = bm.exp(1j * x_grid.flatten())
+        exppos_y = bm.exp(1j * y_grid.flatten())
+
+        center = bm.zeros(2)
+        center[0] = bm.angle(bm.sum(exppos_x * input_hpc))
+        center[1] = bm.angle(bm.sum(exppos_y * input_hpc))
+        return center
 
     @property
     def derivative(self):
@@ -208,7 +219,7 @@ class Grid_2D(bp.DynamicalSystem):
         self.r.value = r1 / r2
         self.get_center()
 
-    def update(self, pos, velocity, r_hpc, hpc2mec_stre=0., train=0, get_loc=1, debug=False):
+    def update(self, pos, velocity, r_hpc, hpc2mec_stre=0., train=0, get_loc=1, debug=False, v_noise=0.001):
         self.get_center()
 
         v_rot = bm.matmul(self.rot, velocity)
@@ -219,9 +230,9 @@ class Grid_2D(bp.DynamicalSystem):
         # jax.debug.print("check mec center {}, {}", self.center, self.centerI)
 
         input_pos = self.get_stimulus_by_pos(pos)
-        input_motion = self.get_stimulus_by_motion(velocity)
+        input_motion = self.get_stimulus_by_motion(velocity, noise_stre=v_noise)
         self.input = bm.where(get_loc == 1, input_pos, input_motion)
-        input_hpc = bm.matmul(self.conn_in, r_hpc) - 0.1
+        input_hpc = bm.matmul(self.conn_in, r_hpc)
         input_hpc = bm.where(input_hpc > 0, input_hpc, 0)
 
         self.input.value += input_hpc * hpc2mec_stre
@@ -234,6 +245,9 @@ class Grid_2D(bp.DynamicalSystem):
         r2 = 1.0 + self.k * bm.sum(r1)
         self.r.value = r1 / r2
         r_learn_hpc = keep_top_n(r_hpc, self.spike_num)
+        if debug:
+            jax.debug.print("check mec in {} {} {} {} {}", bm.argmax(self.r), bm.max(self.r),
+                            bm.max(input_motion), bm.max(Irec), bm.max(input_hpc))
         if train > 0:
             self.conn_out_update(r_learn_hpc=r_learn_hpc)
             self.conn_in_update(r_hpc=r_hpc)

@@ -14,9 +14,11 @@ class Env:
             [0.7, 0.7]
         ])  # shape = n_land * 2 记录每个landmark的坐标
         self.global_land = bm.array([1.2, 1.1])
-        self.diameter = 1
+        self.diameter_min = 0
+        self.diameter_max = 1
+        self.diameter = self.diameter_max - self.diameter_min
         self.grid_size = 0.1
-        self.grid_color = bm.random.rand(int(self.diameter//self.grid_size + 1)**2, key=42)
+        # self.grid_color = bm.random.rand(int(self.diameter//self.grid_size + 1)**2, key=42)
         self.env_index = 1
 
         # 下面是交互式环境的配置
@@ -37,20 +39,29 @@ class Env:
         return pos_color
 
     def get_feature(self, pos):
-        pos_color = self.get_color(pos)
-        # 根据color分成 30个bins，生成高斯分布, 感受野为一整个环境直径
-        bins = np.linspace(0.01, self.diameter-0.01, 30)
-        dis_l = pos_color[:, np.newaxis] - bins[np.newaxis, :]
-        gauss_width = 0.05 * self.diameter  # 占总环境直径的7%
+        # 到100个点的距离
+        landm_xs, landm_ys = np.meshgrid(np.linspace(0, 1, 10),
+                                         np.linspace(0, 1,10))
+        landms = np.array([landm_xs, landm_ys]).reshape(2,100).transpose(1,0)
+        if len(pos.shape) == 1:
+            dis_l = np.linalg.norm(landms-pos, axis=-1)
+        else:
+            dis_l = np.linalg.norm(pos[:,np.newaxis,:]-landms[np.newaxis,:], axis=-1)
+        # pos_color = self.get_color(pos)
+        # # 根据color分成 30个bins，生成高斯分布, 感受野为一整个环境直径
+        # bins = np.linspace(0.01, self.diameter-0.01, 30)
+        # dis_l = pos_color[:, np.newaxis] - bins[np.newaxis, :]
+        gauss_width = 0.07 * (self.diameter_max-self.diameter_min)  # 占总环境直径的7%
         features = np.exp(- (dis_l ** 2) / (2 * gauss_width ** 2))
         return features
 
     def check_edge_corner(self, pos: np.array):
-        return (pos <= 0).sum() + (pos>=self.diameter).sum()
+        return (pos <= self.diameter_min).sum() + (pos>=self.diameter_max).sum()
 
     def get_train_traj(self, T, v=0.01, dy=0.01, dt=1.):
         # 密集覆盖整个环境
-        pos = np.array([0+v/2,0+v/2])
+        pos = np.random.rand(2) * (self.diameter_max-self.diameter_min-v) + self.diameter_min + v/2
+        # pos = np.array([self.diameter_min+v/2,self.diameter_min+v/2])
         v_now = np.array([0,v])
         dy_now = np.array([dy, 0])
         traj_pos = []
@@ -83,8 +94,8 @@ class Env:
     def get_test_traj(self, T, v_max=0.01):
         t = np.arange(0, T, bm.dt)
         # 使用调整后的振幅和频率定义 x(t) 和 y(t)
-        x = 0.45 * np.sin(v_max / 10 * t) + 0.45
-        y = 0.45 * np.cos(v_max * 3 / 10 * t) + 0.45
+        x = (self.diameter_max-self.diameter_min)/5*2 * np.sin(v_max / 10 * t) + (self.diameter_max-self.diameter_min)/2
+        y = (self.diameter_max-self.diameter_min)/5*2 * np.cos(v_max * 3 / 10 * t) + (self.diameter_max-self.diameter_min)/2
 
         # 将位置和速度矩阵转换为NumPy数组
         positions_matrix = np.column_stack((x, y))
@@ -109,19 +120,19 @@ class Env:
     def step(self, action, v_abs=0.01):
         v_vec = np.array([0,0])
         if action==0:
-            if self.agent_pos[1]+v_abs < 1:
+            if self.agent_pos[1]+v_abs < self.diameter_max:
                 v_vec = np.array([0,1])*v_abs
                 self.agent_pos += v_vec
         elif action==1:
-            if self.agent_pos[1]-v_abs > 0:
+            if self.agent_pos[1]-v_abs > self.diameter_min:
                 v_vec = -np.array([0,1])*v_abs
                 self.agent_pos += v_vec
         elif action==2:
-            if self.agent_pos[0]+v_abs < 1:
+            if self.agent_pos[0]+v_abs < self.diameter_max:
                 v_vec = np.array([1,0])*v_abs
                 self.agent_pos += v_vec
         elif action==3:
-            if self.agent_pos[0]-v_abs > 0:
+            if self.agent_pos[0]-v_abs > self.diameter_min:
                 v_vec = -np.array([1,0])*v_abs
                 self.agent_pos += v_vec
         else:
@@ -161,7 +172,7 @@ class ConfigParam:
         self.mec_max_ratio = 9
         self.num_hpc = 8000
         self.num_HD = 128
-        self.num_sen = 30
+        self.num_sen = 100
         self.dt = 1.  # 在轨迹采样函数没改变时，dt只能是1，否则速度，loc关系将会不对应
 
         # Amount of cells in Hippocampus
@@ -171,7 +182,7 @@ class ConfigParam:
 
         # 细胞发放高斯形状控制
         self.a_mec = bm.pi / 2
-        self.a_land = 0.07 * env.diameter
+        self.a_land = 0.07 * (env.diameter_max - env.diameter_min)
 
         # Time constants of neural dynamics
         self.tau = 1.
@@ -191,7 +202,7 @@ class ConfigParam:
         self.lr_sen_exc = 10.
         self.lr_exc = 2.5 / self.num_hpc
         self.lr_mec_out = 20
-        self.lr_mec_in = self.lr_exc
+        self.lr_mec_in = 20 / self.num_hpc  # self.lr_exc
         self.lr_back = self.lr_exc
 
 
@@ -216,6 +227,7 @@ def draw_traj(traj, fea):
 
 if __name__ == '__main__':
     env = Env()
-    traj, fea = env.get_train_traj(T=4000, v=0.03, dy=0.1)
-    draw_traj(traj, fea)
+    env.get_feature(np.array([[0.1,0.2],[0.4,0.2]]))
+    # traj, fea = env.get_train_traj(T=4000, v=0.03, dy=0.1)
+    # draw_traj(traj, fea)
 

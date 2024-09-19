@@ -53,11 +53,28 @@ class Hippocampus_2D(bp.DynamicalSystemNS):
         self.u.value = bm.Variable(bm.zeros(self.num, ))
         self.v.value = bm.Variable(bm.zeros(self.num, ))
 
+    def reset_sen_w(self):
+        self.W_sen_back.value = bm.Variable(bm.zeros([self.num_sen, self.num]))
+        self.W_sen.value = bm.Variable(bm.abs(bm.random.normal(0, 0.1, (self.num, self.num_sen))))
+        self.W_sen.value = normalize_rows(self.W_sen) * self.norm_sen_exc
+
+    def load_sen_w(self, state_dict):
+        for k,p in state_dict.items():
+            if k == "Hippocampus_2D0":
+                for hpc_k, hpc_p in p.items():
+                    if hpc_k == "Hippocampus_2D0.W_sen":
+                        self.W_sen.value = hpc_p
+                        print("W_sen load")
+                    elif hpc_k == "Hippocampus_2D0.W_sen_back":
+                        self.W_sen_back.value = hpc_p
+                        print("W sen back load")
+
     def conn_update_forward(self, r_sen):
         # 这里试图将HPC的发放和I_sen绑定在一起
         # 最纯粹的hebbing学习，竞争通过函数外的top_K完成
         r_learn = self.r_learn.reshape(-1, 1)  # r_learn就是HPC细胞的发放，选取topK个
         r_sen = r_sen.reshape(-1, 1)  # r_sen是I_ovc, r_sen* W_sen后 shape与hpc_num一致
+        # TODO sen是否需要筛选？
         corr_mat_sen = bm.outer(r_learn, r_sen)
         # I_sen = bm.matmul(self.W_sen, r_sen)
         # corr_mat_sen = bm.outer(r_learn, I_sen)
@@ -80,7 +97,7 @@ class Hippocampus_2D(bp.DynamicalSystemNS):
     def conn_update_back(self, r_sen, thres=3.5):
         # Oja学习，第一项保证噪音干扰下的OVC输入和hpc发放趋于一致，所以这项可以跟踪W_sen，后面是为了正则化。总之是为了在噪音下追踪W_sen
         # 目前怀疑是两个权重占比差别太多了
-        r_sen = r_sen + bm.random.normal(0, 0.01, (self.num_sen,))
+        r_sen = r_sen  # + bm.random.normal(0, 0.01, (self.num_sen,))
         r_sen = r_sen.reshape(-1, 1)
         r_exc = self.r.reshape(-1, 1)
         r_exc = bm.where(r_exc > thres, r_exc, 0)
@@ -112,8 +129,8 @@ class Hippocampus_2D(bp.DynamicalSystemNS):
         r1 = bm.square(self.u)
         r2 = 1.0 + self.k * bm.sum(r1)
         self.r.value = r1 / r2
-        # jax.debug.print("check max hpc idx {} {} {} {} {}", bm.argmax(self.r),
-        #                     bm.max(self.r), bm.max(I_sen), bm.max(I_rec), bm.max(I_mec))
+        jax.debug.print("check max hpc idx {} {} {} {} {}", bm.argmax(self.r),
+                            bm.max(self.r), bm.max(I_sen), bm.max(I_rec), bm.max(I_mec))
 
         if train == 1:
             self.conn_update_rec()  # from HPC to HPC

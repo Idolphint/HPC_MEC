@@ -1,3 +1,5 @@
+import datetime
+
 import brainpy.math as bm
 import numpy as np
 import matplotlib.pyplot as plt
@@ -80,9 +82,9 @@ def init_model(Coupled_Model, loc0, loc_fea0):
 
 
 def plot_place_data(hpc_u, hpc_fr, I_mec, I_sen, loc, env, step, dir, thres=3.5):
-    max_u, place_index, place_num = place_cell_select_fr(hpc_u, thres=thres)
+    max_u, place_index, place_num = place_cell_select_fr(hpc_fr, thres=thres)
     max_r = np.max(hpc_fr, axis=0)
-    print(step + ':place cell number = {}'.format(place_num))
+    print(step + ':place cell number = {}'.format(place_num), thres)
     place_score = max_r[place_index.reshape(-1, )]
     plt.figure()
     Center = place_center(hpc_fr, place_index, loc)
@@ -121,15 +123,16 @@ def draw_population_activity(directory, place_info_path, u_mec, hpc_fr, I_mec, I
     place_sen = I_sen[:, place_index.reshape(-1, )]
 
     # Decode population activities of place cells
-    decoded_x, decoded_y = get_center_hpc(place_fr, place_cell_coordinates[:, 0], place_cell_coordinates[:, 1])
+    decoded_x, decoded_y = get_center_hpc(place_fr, place_cell_coordinates[:, 0], place_cell_coordinates[:, 1], method="max")
     decoded_x_mec, decoded_y_mec = get_center_hpc(place_mec, place_cell_coordinates[:, 0], place_cell_coordinates[:, 1],
-                                                  thres=0.4)  # Grid cell input
+                                                  thres=0.4, method="max")  # Grid cell input
     decoded_x_sen, decoded_y_sen = get_center_hpc(place_sen, place_cell_coordinates[:, 0],
-                                                  place_cell_coordinates[:, 1])  # LV cell input
+                                                  place_cell_coordinates[:, 1], method="max")  # LV cell input
 
     # Plot trajectory  画出来place_fr的轨迹中心，place_mec的轨迹中心，place_sen的轨迹中心
     x = loc[:, 0]
     y = loc[:, 1]
+
     print("check traj shape", x.shape, decoded_x.shape, decoded_x_mec.shape)
     fig = plt.figure()
     plt.plot(x, y, label="Groudtruth Trajectory")
@@ -147,6 +150,20 @@ def draw_population_activity(directory, place_info_path, u_mec, hpc_fr, I_mec, I
     plt.grid(True)
     figname = directory + step + 'Place_decoding.png'
     plt.savefig(figname)
+    decoded_x = decoded_x[:, 0]
+    decoded_y = decoded_y[:, 0]
+    decoded_x_mec = decoded_x_mec[:, 0]
+    decoded_y_mec = decoded_y_mec[:, 0]
+    decoded_x_sen = decoded_x_sen[:, 0]
+    decoded_y_sen = decoded_y_sen[:, 0]
+    print("check shape", decoded_x.shape, x.shape, np.sqrt((decoded_x - x) ** 2 + (decoded_y - y) ** 2).shape)
+    # hpc_c_error = np.sqrt((decoded_x - x) ** 2 + (decoded_y - y) ** 2)
+    # mec_c_error = np.sqrt((decoded_x_mec - x) ** 2 + (decoded_y_mec - y) ** 2)
+    # sen_c_error = np.sqrt((decoded_x_sen - x) ** 2 + (decoded_y_sen - y) ** 2)
+    # print("check shape", hpc_c_error.shape, mec_c_error.shape, sen_c_error.shape)
+    # data_error = {"hpcE": hpc_c_error, "mecE": mec_c_error, "SenE": sen_c_error}
+    # np.save("./tmp/error_log" + datetime.datetime.now().strftime("%m-%d-%H-%M") + ".npy", data_error)
+    # print("error saved!")
 
     # Generate animation of population activities of place cells
     n_step = 8
@@ -258,10 +275,41 @@ def draw_nav_traj(traj, traj_grid_code, prefix=""):
     ani_filename = f'./policy_ckpt/test_traj_with_grid_code_{prefix}.gif'
     ani.save(ani_filename, writer='Pillow', fps=2)
 
+
+def draw_error():
+    b = np.load("./tmp/error_log09-13-23-51.npy", allow_pickle=True).item()
+    a = np.load("./tmp/error_log09-14-00-00.npy", allow_pickle=True).item()
+    print(a, a["hpcE"].shape)
+    T = np.arange(len(a["hpcE"]))
+    plt.plot(T, a["hpcE"], label="with Sen hpc error")
+    plt.plot(T, a["mecE"], label="with Sen mec error")
+    plt.plot(T, a["SenE"], label="with Sen sen error")
+    plt.plot(T, b["hpcE"], label="hpc error")
+    plt.plot(T, b["mecE"], label="mec error")
+    # plt.plot(T, b["senE"], label="mec error")
+    plt.legend()
+    plt.savefig("./tmp/error_compare.jpg")
+    plt.show()
+
+
+def draw_center_traj(data_path):
+    data = np.load("./tmp/center_traj.npy", allow_pickle=True).item()
+    hpc_c, hpc_max, mec_c, loc = data["hpcC"], data["hpc_max"], data["mecC"], data["loc"]
+    print(hpc_max)
+    plt.plot(hpc_c[:, 0], hpc_c[:, 1])
+    plt.plot(mec_c[:, 0], mec_c[:, 1])
+    plt.legend()
+    # plt.plot(loc[:, 0], loc[:, 1])
+    # plt.imshow()
+    plt.show()
+
 if __name__ == '__main__':
     # x = bm.random.normal(0,0.2,(100,100,7))
     # draw_grid_activity(x, "x", "x")
-    data = np.load("./tmp/saved_traj11.npy",allow_pickle=True).item()
-    part_traj = data["traj"]
-    part_code = data["code"]
-    draw_nav_traj(part_traj, part_code, '11')
+    # data = np.load("./tmp/saved_traj11.npy",allow_pickle=True).item()
+    # part_traj = data["traj"]
+    # part_code = data["code"]
+    # draw_nav_traj(part_traj, part_code, '11')
+    # draw_error()
+    draw_center_traj("")
+    # draw_population_activity()

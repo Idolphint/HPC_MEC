@@ -38,7 +38,7 @@ class Coupled_Net(bp.DynamicalSystemNS):
         for MEC_model in self.MEC_model_list:
             MEC_model.reset_state(loc)
 
-    def update(self, velocity, loc, loc_fea, get_loc=0, get_view=0, train=0):
+    def update(self, velocity, loc, loc_fea, get_loc=0, get_view=0, train=0, v_noise=0.001):
         """
         :param velocity:
         :param loc:
@@ -56,15 +56,15 @@ class Coupled_Net(bp.DynamicalSystemNS):
         for i in range(self.num_module):
             MEC_model = self.MEC_model_list[i]
             MEC_model.update(pos=loc, velocity=velocity, r_hpc=r_hpc, hpc2mec_stre=self.hpc2mec_stre,
-                             train=train, get_loc=get_loc, debug=i == 1)
+                             train=train, get_loc=get_loc, debug=i == 1, v_noise=v_noise)
             r_mec = MEC_model.r
             self.u_mec_module[:, i] = r_mec
-            I_mec_module = bm.matmul(MEC_model.conn_out, r_mec - 0.5 * bm.max(r_mec))  # r_mec自然地分成一半正一半负
+            I_mec_module = bm.matmul(MEC_model.conn_out, r_mec - 0.7 * bm.max(r_mec))  # r_mec自然地分成一半正一半负
 
             I_mec += I_mec_module
             # jax.debug.print("check i mec {} {} {}", bm.max(I_mec_module), bm.argmax(I_mec_module),
             #                 I_mec_module[bm.argmax(r_hpc)])
-            input_hpc = bm.matmul(MEC_model.conn_in, r_hpc) - 0.1  # 从hpc输入到MEC的量
+            input_hpc = bm.matmul(MEC_model.conn_in, r_hpc)  # 从hpc输入到MEC的量
             input_hpc = bm.where(input_hpc > 0, input_hpc, 0)
             self.input_hpc_module[:, i] = input_hpc
         # jax.debug.print("check input hpc {}", self.input_hpc_module[:0])
@@ -77,6 +77,7 @@ class Coupled_Net(bp.DynamicalSystemNS):
         W_sen_back = self.HPC_model.W_sen_back
         self.input_back = bm.matmul(W_sen_back, r_hpc)
         r_sen = I_fea.flatten() + get_view * self.input_back  # 使用sen_back以矫正sen的中心
+        # jax.debug.print("check I_fea sen_back {} {}", I_fea.max(), self.input_back.max())
         r_sen = bm.where(r_sen > 1, 1, r_sen)
 
         self.r_sen.value = bound_effect * I_fea.flatten()
@@ -89,7 +90,7 @@ class Coupled_Net(bp.DynamicalSystemNS):
 def make_coupled_net():
     env = Env()
     config = ConfigParam(env)
-    ratio = np.linspace(6.2, 40, config.num_mec_module)  # TODO 确认是否0，1长度的环境这个周期可以？
+    ratio = np.linspace(6.0, 40, config.num_mec_module)  # TODO 确认是否0，1长度的环境这个周期可以？
     strength = np.linspace(1.5, 11, config.num_mec_module)
     angle = np.linspace(0, np.pi / 3, config.num_mec_module)
 
