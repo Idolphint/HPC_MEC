@@ -173,7 +173,7 @@ class Grid_2D(bp.DynamicalSystem):
         corr_out = bm.outer(r_learn, r_grid)
         # conn_out = self.conn_out + (self.lr_out * self.conn_out) / self.tau_W_out * bm.dt
         conn_out = self.conn_out + (self.lr_out * corr_out * self.conn_out) / self.tau_W_out * bm.dt
-        conn_out = bm.where(conn_out > -0.1, conn_out, -0.1)
+        conn_out = bm.where(conn_out > 0, conn_out, 0)
         self.conn_out.value = self.norm_fac * normalize_rows(conn_out) * bm.exp(-self.module_strength ** 2 / 5 ** 2)
 
     def conn_in_update(self, r_hpc, thres=3.5):

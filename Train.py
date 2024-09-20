@@ -70,7 +70,7 @@ def testing_func(Coupled_Model, config, v_abs=0.02, init_get_loc=0., get_view=1,
 
     # 运动时mec信息更多，其他信息也存在，适当提高sen比重
     Coupled_Model.mec2hpc_stre = 1.
-    Coupled_Model.sen2hpc_stre = 0.
+    Coupled_Model.sen2hpc_stre = 3.
     Coupled_Model.hpc2mec_stre = 1.
     def run_net(i, velocity, loc, loc_fea):  # 20 x size
         Coupled_Model.step_run(i, velocity=velocity, loc=loc, loc_fea=loc_fea,
@@ -144,7 +144,6 @@ def train(env_step=2, title=""):
 
         filename_hpc = directory + f'Coupled_Model_1_env{env_step}'
         bp.checkpoints.save_pytree(filename_hpc, Coupled_Model.state_dict())
-
     # Second step: training from LV to HPC
     for sub_train in range(train_lap_num):
         Coupled_Model.hpc2mec_stre = 1.
@@ -185,10 +184,14 @@ def test(directory, env_step=2, prefix="", load_ckpt=None):
         filename_hpc = directory + load_ckpt
         state_dict = bp.checkpoints.load_pytree(filename_hpc)  # load the state dict
         bp.load_state(Coupled_Model, state_dict)  # unpack the state dict and load it into the network
+        # 检查conn_out
+        # for mi in range(7):
+        #     conn_out = Coupled_Model.MEC_model_list[mi].conn_out.value
+        #     print("check conn out sum",mi, conn_out.shape, bm.sum(conn_out, axis=0),
+        #           bm.max(conn_out, axis=0), bm.min(conn_out, axis=0))
     # Coupled_Model.sen2hpc_stre = 1.
     # Coupled_Model.hpc2mec_stre = 1.
     # Coupled_Model.mec2hpc_stre = 1.
-
     init_get_loc = 0
     get_view = 1
 
@@ -202,7 +205,7 @@ def test(directory, env_step=2, prefix="", load_ckpt=None):
     hpc_u, hpc_fr, I_mec, I_sen, loc = testing_func(Coupled_Model=Coupled_Model, config=config,
                                                     init_get_loc=init_get_loc, get_view=get_view, reset_stre=[0.,5.,5.],
                                                     test_traj=False)
-    thres = 3.0
+    thres = 3.5
     place_info_path = plot_place_data(hpc_u=hpc_u, hpc_fr=hpc_fr, I_mec=I_mec, I_sen=I_sen,
                                  loc=loc, env=env, step=f"env{env_step}{prefix}", dir=directory, thres=thres)
     print(place_info_path)
@@ -229,13 +232,13 @@ if __name__ == '__main__':
         bm.set_dt(config.dt)
         Coupled_Model = make_coupled_net()
 
-        # state_dict = bp.checkpoints.load_pytree("./ratio9_lap5_lr+2024-09-19-16/Coupled_Model_1_env1.bp")
-        # bp.load_state(Coupled_Model, state_dict)  # unpack the state dict and load it into the network
+        state_dict = bp.checkpoints.load_pytree("./ratio9_lap3_ratio-2024-09-20-11/Coupled_Model_1_env1.bp")
+        bp.load_state(Coupled_Model, state_dict)  # unpack the state dict and load it into the network
         #
         # Coupled_Model.HPC_model.reset_sen_w()
         # Coupled_Model.HPC_model.load_sen_w(state_dict)
-        train(env_step=1, title="lr+")
-        test("./ratio9_lap5_lr+2024-09-19-16/", env_step=1, prefix="preTrain", load_ckpt="Coupled_Model_2_env1.bp")
+        # train(env_step=1, title="ratio-")
+        test("./ratio9_lap3_ratio-2024-09-20-11/", env_step=1, prefix="sen", load_ckpt="Coupled_Model_2_env1.bp")
         # train(env_step=1)
         # test("./ratio9_lap5_2024-09-12-17/", env_step=1)
         # test("./ratio9_lap5_2024-09-12-17/", env_step=2)

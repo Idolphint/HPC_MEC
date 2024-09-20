@@ -59,11 +59,13 @@ class Coupled_Net(bp.DynamicalSystemNS):
                              train=train, get_loc=get_loc, debug=i == 1, v_noise=v_noise)
             r_mec = MEC_model.r
             self.u_mec_module[:, i] = r_mec
-            I_mec_module = bm.matmul(MEC_model.conn_out, r_mec - 0.7 * bm.max(r_mec))  # r_mec自然地分成一半正一半负
+            r_mec = r_mec - 0.6 * bm.max(r_mec)
+            # r_mec = bm.where(r_mec<0, 0, r_mec)
+            I_mec_module = bm.matmul(MEC_model.conn_out, r_mec)  # r_mec自然地分成一半正一半负
 
             I_mec += I_mec_module
-            # jax.debug.print("check i mec {} {} {}", bm.max(I_mec_module), bm.argmax(I_mec_module),
-            #                 I_mec_module[bm.argmax(r_hpc)])
+            # jax.debug.print("{}: check i mec {} {} r_mec {} {} conn {}", i, bm.max(I_mec_module),
+            #                 I_mec_module[bm.argmax(r_hpc)], bm.max(r_mec), bm.sum(r_mec), bm.sum(MEC_model.conn_out, axis=1))
             input_hpc = bm.matmul(MEC_model.conn_in, r_hpc)  # 从hpc输入到MEC的量
             input_hpc = bm.where(input_hpc > 0, input_hpc, 0)
             self.input_hpc_module[:, i] = input_hpc
@@ -90,7 +92,7 @@ class Coupled_Net(bp.DynamicalSystemNS):
 def make_coupled_net():
     env = Env()
     config = ConfigParam(env)
-    ratio = np.linspace(6.0, 40, config.num_mec_module)  # TODO 确认是否0，1长度的环境这个周期可以？
+    ratio = np.linspace(5.0, 40, config.num_mec_module)  # TODO 确认是否0，1长度的环境这个周期可以？
     strength = np.linspace(1.5, 11, config.num_mec_module)
     angle = np.linspace(0, np.pi / 3, config.num_mec_module)
 

@@ -197,7 +197,7 @@ class ConfigParam:
         self.tau_e = 1000
 
         # Parameters of learning
-        self.norm_sen_exc = 0.5
+        self.norm_sen_exc = 0.5  # 原本0.5太小了
         self.norm_fac = 30.
         self.lr_sen_exc = 10.
         self.lr_exc = 2.5 / self.num_hpc

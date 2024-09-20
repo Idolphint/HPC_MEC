@@ -50,11 +50,11 @@ def get_center_hpc(fr, center_x, center_y, thres=0.2, method="max"):
         # 最大值法计算中心
         max_index = np.argmax(fr, axis=1)
         T = fr.shape[0]
-        Cx = np.zeros(T,)
-        Cy = np.zeros(T,)
+        Cx = np.zeros((T,1))
+        Cy = np.zeros((T,1))
         for i in range(T):
-            Cx[i] = center_x[max_index[i]]
-            Cy[i] = center_y[max_index[i]]
+            Cx[i,0] = center_x[max_index[i]]
+            Cy[i,0] = center_y[max_index[i]]
     else:
         print("center method", method, "not in valid list")
     return Cx, Cy
@@ -84,7 +84,7 @@ def init_model(Coupled_Model, loc0, loc_fea0):
 def plot_place_data(hpc_u, hpc_fr, I_mec, I_sen, loc, env, step, dir, thres=3.5):
     max_u, place_index, place_num = place_cell_select_fr(hpc_fr, thres=thres)
     max_r = np.max(hpc_fr, axis=0)
-    print(step + ':place cell number = {}'.format(place_num), thres)
+    print(step + ':place cell number = {}'.format(place_num), thres, hpc_fr.shape, max_r)
     place_score = max_r[place_index.reshape(-1, )]
     plt.figure()
     Center = place_center(hpc_fr, place_index, loc)
@@ -123,11 +123,11 @@ def draw_population_activity(directory, place_info_path, u_mec, hpc_fr, I_mec, I
     place_sen = I_sen[:, place_index.reshape(-1, )]
 
     # Decode population activities of place cells
-    decoded_x, decoded_y = get_center_hpc(place_fr, place_cell_coordinates[:, 0], place_cell_coordinates[:, 1], method="max")
+    decoded_x, decoded_y = get_center_hpc(place_fr, place_cell_coordinates[:, 0], place_cell_coordinates[:, 1], method="avg")
     decoded_x_mec, decoded_y_mec = get_center_hpc(place_mec, place_cell_coordinates[:, 0], place_cell_coordinates[:, 1],
-                                                  thres=0.4, method="max")  # Grid cell input
+                                                  thres=0.4, method="avg")  # Grid cell input
     decoded_x_sen, decoded_y_sen = get_center_hpc(place_sen, place_cell_coordinates[:, 0],
-                                                  place_cell_coordinates[:, 1], method="max")  # LV cell input
+                                                  place_cell_coordinates[:, 1], method="avg")  # LV cell input
 
     # Plot trajectory  画出来place_fr的轨迹中心，place_mec的轨迹中心，place_sen的轨迹中心
     x = loc[:, 0]
@@ -138,7 +138,7 @@ def draw_population_activity(directory, place_info_path, u_mec, hpc_fr, I_mec, I
     plt.plot(x, y, label="Groudtruth Trajectory")
     plt.plot(decoded_x[10:-10], decoded_y[10:-10], label="Decoded Trajectory HPC")
     plt.plot(decoded_x_mec[10:-10], decoded_y_mec[10:-10], label="Decoded Trajectory MEC")
-    plt.plot(decoded_x_sen[10:-10], decoded_y_sen[10:-10], label="Decoded Trajectory SEN")
+    # plt.plot(decoded_x_sen[10:-10], decoded_y_sen[10:-10], label="Decoded Trajectory SEN")
 
     plt.plot(env.loc_land[:, 0], env.loc_land[:, 1], 'r.', markersize=10)
     plt.xlim(0, 1)  # -2.5, 2.5)
