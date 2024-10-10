@@ -4,7 +4,7 @@ import jax
 import numpy as np
 from HPC import Hippocampus_2D
 from MEC import Grid_2D
-from env import Env, ConfigParam
+from env import ConfigParam
 
 class Coupled_Net(bp.DynamicalSystemNS):
     def __init__(self, HPC_model, MEC_model_list, num_module, config=None,
@@ -12,13 +12,10 @@ class Coupled_Net(bp.DynamicalSystemNS):
                  sen2HD_stre=0.):
         super(Coupled_Net, self).__init__()
         self.config = config
-        self.env = config.env
         self.HPC_model = HPC_model
         self.MEC_model_list = MEC_model_list
         self.num_module = num_module
         # landmark/boundaries parameters
-        self.loc_land = config.env.loc_land
-        self.a_land = config.a_land
         # sensory input numbers
         self.num_sen = config.num_sen
         num_mec = MEC_model_list[0].num
@@ -33,8 +30,10 @@ class Coupled_Net(bp.DynamicalSystemNS):
         self.sen2hpc_stre = sen2hpc_stre
         self.hpc2mec_stre = hpc2mec_stre
 
-    def reset_state(self, loc):
+    def reset_state(self, loc=None):
         self.HPC_model.reset_state()
+        if loc is None:
+            loc = bm.array([0.,0.])
         for MEC_model in self.MEC_model_list:
             MEC_model.reset_state(loc)
 
@@ -89,9 +88,9 @@ class Coupled_Net(bp.DynamicalSystemNS):
         self.HPC_model.update(I_mec=self.I_mec, I_sen=self.I_sen, I_OVCs=I_fea.flatten(), train=train)
 
 
-def make_coupled_net():
-    env = Env()
-    config = ConfigParam(env)
+def make_coupled_net(config=None):
+    if config is None:
+        config = ConfigParam()
     ratio = np.linspace(5.0, 40, config.num_mec_module)  # TODO 确认是否0，1长度的环境这个周期可以？
     strength = np.linspace(1.5, 11, config.num_mec_module)
     angle = np.linspace(0, np.pi / 3, config.num_mec_module)

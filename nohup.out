@@ -1,0 +1,2 @@
+TensorFlow installation not found - running with reduced feature set.
+Error: A logdir or db must be specified. For example `tensorboard --logdir mylogdir` or `tensorboard --db sqlite:~/.tensorboard.db`. Run `tensorboard --helpfull` for details and examples.

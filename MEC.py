@@ -80,7 +80,7 @@ class Grid_2D(bp.DynamicalSystem):
         d = bm.where(d < -bm.pi, d + 2 * bm.pi, d)
         return d
 
-    def dist(self, d):
+    def dist(self, d):  # 将相位空间拉成六边形
         d = self.circle_period(d)
         delta_x = d[:, 0] + d[:, 1] / 2
         delta_y = d[:, 1] * bm.sqrt(3) / 2
@@ -119,9 +119,11 @@ class Grid_2D(bp.DynamicalSystem):
         d = self.dist(bm.asarray(Phase) - self.value_grid)
         return self.A * bm.exp(-0.25 * bm.square(d / self.a))
 
-    def get_stimulus_by_motion(self, velocity, noise_stre=0.0):
+
+    def get_stimulus_by_motion(self, velocity, noise_stre=0.0, debug=False):
+        # center 是6变形空间的相位，所以phase_estimate也是6变形空间相位，而value_grid是4变形相位，求dist却使用4边形空间逻辑？
         # integrate self motion
-        noise_v = bm.random.randn(1) * noise_stre  # 1/10的噪音速度
+        noise_v = bm.random.randn(2) * noise_stre  # 1/10的噪音速度
         velocity = velocity + noise_v
         v_rot = bm.matmul(self.rot, velocity)
         v_phase = bm.matmul(self.coor_transform, v_rot * self.ratio)
@@ -130,10 +132,17 @@ class Grid_2D(bp.DynamicalSystem):
         # 新版本中不用积分器了，因为可能出错了？
         # pos_e = self.path_integral(self.phase_estimate, bp.share['t'], v_phase, bm.dt)
         self.phase_estimate.value = self.circle_period(pos_e)
+        # if debug:
+        #     jax.debug.print("v_noise {}, dis phase {} phase {}", v_phase, dis_phase, self.phase_estimate)
         # jax.debug.print("check mec phase estimate {} {} {} ={}", self.phase_estimate.value,v_phase,dis_phase, self.center)
         d = self.dist(self.phase_estimate - self.value_grid)
+        fire = self.A * bm.exp(-0.25 * bm.square(d / self.a))
+        # if debug:
+        #     jax.debug.print("before {} after decode{}", self.phase_estimate, Grid_2D.get_center_tmp(fire))
+        # d = self.circle_period(self.phase_estimate - self.value_grid)
+        # d = bm.sqrt(d[:, 0] ** 2 + d[:, 1] ** 2)
         # d = self.dist(self.center_ideal - self.value_grid)
-        return self.A * bm.exp(-0.25 * bm.square(d / self.a))
+        return fire
 
     def get_center(self):
         exppos_x = bm.exp(1j * self.x_grid)
@@ -144,9 +153,11 @@ class Grid_2D(bp.DynamicalSystem):
         self.center[1] = bm.angle(bm.sum(exppos_y * r))
         self.centerI[0] = bm.angle(bm.sum(exppos_x * self.input))
         self.centerI[1] = bm.angle(bm.sum(exppos_y * self.input))
+
     @staticmethod
     def get_center_tmp(input_hpc):
-        x_grid, y_grid = bm.meshgrid(bm.linspace(-bm.pi, bm.pi, 10, endpoint=False), bm.linspace(-bm.pi, bm.pi, 10, endpoint=False))
+        x_grid, y_grid = bm.meshgrid(bm.linspace(-bm.pi, bm.pi, 10, endpoint=False),
+                                     bm.linspace(-bm.pi, bm.pi, 10, endpoint=False))
         exppos_x = bm.exp(1j * x_grid.flatten())
         exppos_y = bm.exp(1j * y_grid.flatten())
 
@@ -219,19 +230,34 @@ class Grid_2D(bp.DynamicalSystem):
         self.r.value = r1 / r2
         self.get_center()
 
+    def phase_to_feature_vector(self, phase):
+        # 计算相位与值网格之间的距离
+        d = self.dist(bm.asarray(phase) - self.value_grid)
+        feature_vector = self.A * bm.exp(-0.25 * bm.square(d / self.a))
+        return feature_vector
+
+    def check1(self, phase):  # phase 不可能被完美的翻译出来，只有估算
+        fea = self.phase_to_feature_vector(phase)
+        after_phase = Grid_2D.get_center_tmp(fea)
+        print("before phase", phase, "after phase", after_phase)
+
     def update(self, pos, velocity, r_hpc, hpc2mec_stre=0., train=0, get_loc=1, debug=False, v_noise=0.001):
         self.get_center()
-
         v_rot = bm.matmul(self.rot, velocity)
         v_phase = bm.matmul(self.coor_transform, v_rot * self.ratio)
         center_i = self.center_ideal + v_phase * bm.dt
         self.center_ideal.value = self.circle_period(center_i)  # Ideal phase using path integration
         self.centerI = self.Postophase(pos)  # Ideal phase using mapping function
-        # jax.debug.print("check mec center {}, {}", self.center, self.centerI)
 
         input_pos = self.get_stimulus_by_pos(pos)
-        input_motion = self.get_stimulus_by_motion(velocity, noise_stre=v_noise)
-        self.input = bm.where(get_loc == 1, input_pos, input_motion)
+        input_motion = self.get_stimulus_by_motion(velocity, noise_stre=v_noise, debug=debug)
+        if get_loc==-1:
+            self.input.value = bm.random.normal(0, 0.0001, (self.num,))
+        elif get_loc == 0:
+            self.input.value = input_motion
+        elif get_loc == 1:
+            self.input.value = input_pos
+        # self.input = bm.where(get_loc == 1, input_pos, input_motion)
         input_hpc = bm.matmul(self.conn_in, r_hpc)
         input_hpc = bm.where(input_hpc > 0, input_hpc, 0)
 
@@ -245,9 +271,34 @@ class Grid_2D(bp.DynamicalSystem):
         r2 = 1.0 + self.k * bm.sum(r1)
         self.r.value = r1 / r2
         r_learn_hpc = keep_top_n(r_hpc, self.spike_num)
-        if debug:
-            jax.debug.print("check mec in {} {} {} {} {}", bm.argmax(self.r), bm.max(self.r),
+        if debug and train == 0 and False:
+            jax.debug.print("check mec center {}, {}, motion C{}, recC{}, hpc C {} mec data {} {} {} {}", self.center, self.centerI,
+                            Grid_2D.get_center_tmp(input_motion),
+                            Grid_2D.get_center_tmp(Irec),
+                            Grid_2D.get_center_tmp(input_hpc),
+                            bm.max(self.r),
                             bm.max(input_motion), bm.max(Irec), bm.max(input_hpc))
+        # if debug:
+        #     jax.debug.print("check mec in {} {} {} {} {}", bm.argmax(self.r), bm.max(self.r),
+        #                     bm.max(input_motion), bm.max(Irec), bm.max(input_hpc))
         if train > 0:
             self.conn_out_update(r_learn_hpc=r_learn_hpc)
             self.conn_in_update(r_hpc=r_hpc)
+
+
+if __name__ == '__main__':
+    from env import ConfigParam
+    config = ConfigParam()
+    MEC = Grid_2D(ratio=5.0, angle=0.0, strength=1.5, config=config)
+    for i in range(100):
+        phase = bm.random.rand(2)
+        # MEC.check1(phase)
+
+    # MEC.reset_state(bm.array([0.9, 0.5]))
+    # def initialize_net(i):  # 初始化net完全没必要用motion，要么是loc，要么仅sense
+    #     MEC.step_run(i, pos=bm.array([0.9, 0.5]), velocity=bm.zeros(2,), r_hpc=bm.zeros(config.num_hpc,),
+    #                  hpc2mec_stre=0., train=0, get_loc=0, debug=True, v_noise=0.00)
+    #
+    #
+    # indices = bm.arange(2000)
+    # bm.for_loop(initialize_net, indices, progress_bar=True)

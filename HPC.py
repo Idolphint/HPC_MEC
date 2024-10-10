@@ -129,8 +129,8 @@ class Hippocampus_2D(bp.DynamicalSystemNS):
         r1 = bm.square(self.u)
         r2 = 1.0 + self.k * bm.sum(r1)
         self.r.value = r1 / r2
-        jax.debug.print("check max hpc idx {} {} {} {} {}", bm.argmax(self.r),
-                            bm.max(self.r), bm.max(I_sen), bm.max(I_rec), bm.max(I_mec))
+        # jax.debug.print("check max hpc idx {} {} {} {} {}", bm.argmax(self.r),
+        #                     bm.max(self.r), bm.max(I_sen), bm.max(I_rec), bm.max(I_mec))
 
         if train == 1:
             self.conn_update_rec()  # from HPC to HPC

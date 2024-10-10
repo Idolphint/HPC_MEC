@@ -92,8 +92,8 @@ def plot_place_data(hpc_u, hpc_fr, I_mec, I_sen, loc, env, step, dir, thres=3.5)
     sc = plt.scatter(Center[:, 0], Center[:, 1], c=place_score)
     cbar = plt.colorbar(sc, label='Place Cell Response')
     plt.plot(env.loc_land[:, 0], env.loc_land[:, 1], 'r.', markersize=10, label='Landmarks')
-    plt.xlim([0,1])
-    plt.ylim([0,1])
+    plt.xlim([-0.1,1.1])
+    plt.ylim([-0.1,1.1])
     plt.axis('equal')
     plt.title("place field distribution")
     plt.legend(loc='lower right')
@@ -138,11 +138,11 @@ def draw_population_activity(directory, place_info_path, u_mec, hpc_fr, I_mec, I
     plt.plot(x, y, label="Groudtruth Trajectory")
     plt.plot(decoded_x[10:-10], decoded_y[10:-10], label="Decoded Trajectory HPC")
     plt.plot(decoded_x_mec[10:-10], decoded_y_mec[10:-10], label="Decoded Trajectory MEC")
-    # plt.plot(decoded_x_sen[10:-10], decoded_y_sen[10:-10], label="Decoded Trajectory SEN")
+    plt.plot(decoded_x_sen[10:-10], decoded_y_sen[10:-10], label="Decoded Trajectory SEN")
 
     plt.plot(env.loc_land[:, 0], env.loc_land[:, 1], 'r.', markersize=10)
-    plt.xlim(0, 1)  # -2.5, 2.5)
-    plt.ylim(0, 1)  # -2.5, 2.5)
+    plt.xlim(-0.1, 1.1)  # -2.5, 2.5)
+    plt.ylim(-0.1, 1.1)  # -2.5, 2.5)
     plt.xlabel("x")
     plt.ylabel("y")
     plt.title("Testing result")
@@ -177,8 +177,8 @@ def draw_population_activity(directory, place_info_path, u_mec, hpc_fr, I_mec, I
     plt.plot(decoded_x[10:-10], decoded_y[10:-10])
     plt.plot(decoded_x_mec[10:-10], decoded_y_mec[10:-10])
     plt.plot(env.loc_land[:, 0], env.loc_land[:, 1], 'r.', markersize=10)
-    plt.xlim(0, 1)  # -2.5, 2.5)
-    plt.ylim(0, 1)  # -2.5, 2.5)
+    plt.xlim(-0.1, 1.1)  # -2.5, 2.5)
+    plt.ylim(-0.1, 1.1)  # -2.5, 2.5)
     plt.xlabel("x")
     plt.ylabel("y")
     plt.grid(True)
@@ -303,6 +303,44 @@ def draw_center_traj(data_path):
     # plt.imshow()
     plt.show()
 
+
+def place_change():
+    # 看随训练进度，激活place cell群的改变
+    # 看交叉pc的重心偏移
+    steps = ["pure1", "1+2", "1+2+1"]
+    dir = "ratio9_mixTrain2024-09-23-15"
+    max_fr_list = []
+    place_idx_list = []
+    pc_idx_sorted = []
+    used_pc = set()
+    for lap in range(6):
+        info = f"./{dir}/sub_train_{lap}place_information.npy"
+        data = np.load(info, allow_pickle=True).item()
+        max_fr = data["Max fr"]
+        place_id = data["place_index"]
+        max_fr_list.append(max_fr)
+        place_idx_list.append(place_id)
+        # data["Center"]
+        new_pc = np.array(list(set(place_id) - used_pc))
+        new_pc = new_pc[np.argsort(-max_fr[new_pc])]
+        print("check step", lap, "new used pc", new_pc.shape, "now max fr=", np.max(max_fr))
+        pc_idx_sorted.extend(new_pc)
+        used_pc.update(set(place_id))
+    pc_idx_sorted = np.array(pc_idx_sorted)
+    total_fired_cells = pc_idx_sorted.shape[0]
+    random_center = np.random.rand(total_fired_cells, 2)
+    sorted_center = random_center[np.argsort(np.linalg.norm(random_center, axis=1))]
+    for i in range(len(place_idx_list)):
+        pc_fr = max_fr_list[i][pc_idx_sorted]
+        plt.scatter(sorted_center[:, 0], sorted_center[:, 1], c=pc_fr, cmap='viridis', s=2, alpha=0.7)
+
+        plt.colorbar(label='Output Magnitude')
+        plt.xlabel('Timestep')
+        plt.ylabel('Units')
+        plt.title('Dense Dot Plot of Unit Outputs')
+        plt.savefig(f"./tmp/pc_change_{i}.png")
+        plt.show()
+
 if __name__ == '__main__':
     # x = bm.random.normal(0,0.2,(100,100,7))
     # draw_grid_activity(x, "x", "x")
@@ -311,5 +349,6 @@ if __name__ == '__main__':
     # part_code = data["code"]
     # draw_nav_traj(part_traj, part_code, '11')
     # draw_error()
-    draw_center_traj("")
+    # draw_center_traj("")
     # draw_population_activity()
+    place_change()
