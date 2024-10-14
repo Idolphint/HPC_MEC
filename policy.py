@@ -47,11 +47,11 @@ class GridPolicy(nn.Module):
             nn.Conv2d(mec_module_num*2, 32, 3), #, padding=0, padding_mode='circular'),
             # SinActivation(),
             nn.MaxPool2d(3,1),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Conv2d(32, 32, 3),  #ding=1, padding_mode='circular'),
             # SinActivation(),
             # nn.AvgPool2d(kernel_size=4),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             # nn.Sigmoid(),
             # nn.MaxPool2d(3, 1),
             # nn.AvgPool2d(kernel_size=5),  # 期望到这一步变为16,1
@@ -78,9 +78,9 @@ class GridPolicy(nn.Module):
         # self.fc2 = SineLayer(32, 32, is_first=True)
 
         self.actor = nn.Sequential(
-            nn.Linear(32, 4),
-            # nn.LeakyReLU(),
-            # nn.Linear(16, 4),
+            nn.Linear(32, 16),
+            nn.LeakyReLU(),
+            nn.Linear(16, 4),
             nn.Softmax(),
         )
         self.critic = nn.Sequential(
@@ -106,13 +106,16 @@ class GridPolicy(nn.Module):
         # print("step1", conv_x.shape)
         conv_x = conv_x.reshape(conv_x.shape[0], -1)
         conv_x = self.fc2(conv_x)
-        # print("step2", torch.argmax(conv_x), torch.max(conv_x))
+        if np.random.rand() < 0.004:
+            print("step2", conv_x)
         act_vec = self.actor(conv_x).squeeze()
         values = self.critic(conv_x).squeeze()
         return act_vec, values
 
     def get_actions(self, grid_vector, train=True):
         action_prob, value = self(grid_vector)
+        if not train and np.random.rand() < 0.1:
+            print("check action probs", action_prob)
         if self.action_continue:
             action_mean = action_prob
             cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
@@ -157,7 +160,7 @@ class ReplayBuffer:
         self.mec_x = mec_x_num
         self.mec_y = mec_y_num
         self.value_coeff = 0.5
-        self.entropy_coeff = 0.01
+        self.entropy_coeff = 0.03
         self.gloabl_step = 0
 
         self.device = device
@@ -227,7 +230,8 @@ class ReplayBuffer:
         entropy /= self.index
         # calculate advantage
         # i.e. how good was the estimate of the value of the current state
-        rewards = self._discount_rewards(final_value)
+        rewards = self._discount_rewards(final_value, discount=0.9)
+        print(rewards)
         advantage = rewards - self.values
         advantage = advantage[loss_mask]
         # weight the deviation of the predicted value (of the state) from the
@@ -243,9 +247,11 @@ class ReplayBuffer:
         # due to the fact that batches can be shorter (e.g. if an env is finished already)
         # MEAN is used instead of SUM
         loss = policy_loss + self.value_coeff * value_loss - self.entropy_coeff * entropy
+        if self.gloabl_step%100==0:
+            self.entropy_coeff = max(0.01, self.entropy_coeff-0.02)
 
         if self.writer is not None:
-            self.writer.add_scalar("a2c_loss", loss.item(), self.gloabl_step)
+            self.writer.add_scalar("entropy", entropy, self.gloabl_step)
             self.writer.add_scalar("policy_loss", policy_loss.item(), self.gloabl_step)
             self.writer.add_scalar("value_loss", value_loss.item(), self.gloabl_step)
             self.writer.add_histogram("advantage", advantage.detach(), self.gloabl_step)
@@ -276,7 +282,7 @@ def simple_train_loc(model, cache_code, device):  # TODO 测试完记得把conv 
     #     return g_code
     for i in range(3000):
         p = np.random.random((20, 2))
-        code = cache_code.get_code(p).copy()
+        code = cache_code.get_grid_code(p).copy()
 
         code = torch.Tensor(code).to(device).transpose(2,1).reshape(p.shape[0], 7, 10, 10)
         p_ = p.reshape((10,2,2))

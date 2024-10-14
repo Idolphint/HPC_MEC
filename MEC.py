@@ -241,7 +241,7 @@ class Grid_2D(bp.DynamicalSystem):
         after_phase = Grid_2D.get_center_tmp(fea)
         print("before phase", phase, "after phase", after_phase)
 
-    def update(self, pos, velocity, r_hpc, hpc2mec_stre=0., train=0, get_loc=1, debug=False, v_noise=0.001):
+    def update(self, pos, velocity, r_hpc, hpc2mec_stre=0., train=0, get_loc=1, debug=False, v_noise=0.0001):
         self.get_center()
         v_rot = bm.matmul(self.rot, velocity)
         v_phase = bm.matmul(self.coor_transform, v_rot * self.ratio)
@@ -271,7 +271,7 @@ class Grid_2D(bp.DynamicalSystem):
         r2 = 1.0 + self.k * bm.sum(r1)
         self.r.value = r1 / r2
         r_learn_hpc = keep_top_n(r_hpc, self.spike_num)
-        if debug and train == 0 and False:
+        if debug and train == 0:
             jax.debug.print("check mec center {}, {}, motion C{}, recC{}, hpc C {} mec data {} {} {} {}", self.center, self.centerI,
                             Grid_2D.get_center_tmp(input_motion),
                             Grid_2D.get_center_tmp(Irec),

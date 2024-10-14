@@ -7,7 +7,7 @@ import numpy as np
 # from HPC import Hippocampus_2D
 # from  MEC import Grid_2D
 from Coupled_model import Coupled_Net, make_coupled_net
-from env import Env, ConfigParam
+from env import Env, ConfigParam, EnvZhanTing
 from util import *
 import jax
 from MEC import Grid_2D
@@ -20,7 +20,7 @@ selected_device = devices[0]
 def training_func(Coupled_Model, lapnum, env,
                   train=1, v_abs=0.01, dy=0.1, get_loc=0., get_view=1, init_by_sen=True,
                   reset_stre=None, run_stre=None):
-    locs, loc_feas, velocitys, total_time = env.get_train_traj(T=lapnum/v_abs/dy * 2, v=v_abs, dy=dy)
+    locs, loc_feas, velocitys, total_time = env.get_train_traj(T=int(lapnum/v_abs/dy * 2), v=v_abs, dy=dy)
     velocitys = bm.array(velocitys)
     locs = bm.array(locs)
     loc_feas = bm.array(loc_feas)
@@ -50,7 +50,7 @@ def training_func(Coupled_Model, lapnum, env,
     def run_net(i, velocity, loc, loc_fea):  # 20 x size
         Coupled_Model.step_run(i, velocity=velocity, loc=loc, loc_fea=loc_fea,
                                get_view=get_view, get_loc=0, train = train,
-                               v_noise=0. if get_loc==1 else 0.0001)  # 只靠sen初始化意味着普通，否则要靠真实的loc
+                               v_noise=0. if get_loc==1 else 0.0)  # 只靠sen初始化意味着普通，否则要靠真实的loc
 
     # Coupled_Model.sen2hpc_stre = 1.
     indices = np.arange(total_time)
@@ -61,7 +61,7 @@ def testing_func(Coupled_Model, env, v_abs=0.02, init_get_loc=0., get_view=1,
                  reset_stre=None, test_traj=True, test_module_name="hpc"):
     # construct trajectories
     if test_traj:
-        locs, loc_feas, velocitys, total_time = env.get_test_traj(T=3200, v_max=v_abs)
+        locs, loc_feas, velocitys, total_time = env.get_test_traj(T=3200, v_max=v_abs, dt=config.dt)
     else:
         dy = 0.02
         locs, loc_feas, velocitys, total_time = env.get_train_traj(T=1./ v_abs / dy * 2, v=v_abs, dy=dy)
@@ -82,7 +82,7 @@ def testing_func(Coupled_Model, env, v_abs=0.02, init_get_loc=0., get_view=1,
     # get_loc_tmp = -1
     # indices = np.arange(200)
     # bm.for_loop(initialize_net, indices, progress_bar=True)
-    indices = np.arange(2000)
+    indices = np.arange(500)
     bm.for_loop(initialize_net, indices, progress_bar=True)
 
     # 运动时mec信息更多，其他信息也存在，适当提高sen比重
@@ -92,7 +92,7 @@ def testing_func(Coupled_Model, env, v_abs=0.02, init_get_loc=0., get_view=1,
     def run_net(i, velocity, loc, loc_fea):  # 20 x size
         Coupled_Model.step_run(i, velocity=velocity, loc=loc, loc_fea=loc_fea,
                                get_view=get_view, get_loc=0, train=0,
-                               v_noise=0. if not test_traj else 0.0001)
+                               v_noise=0. if not test_traj else 0.000)
         u_HPC = Coupled_Model.HPC_model.u
         r_HPC = Coupled_Model.HPC_model.r
         I_mec = Coupled_Model.I_mec  # mec 输入到hpc(place cell)的信号
@@ -125,8 +125,8 @@ def testing_func(Coupled_Model, env, v_abs=0.02, init_get_loc=0., get_view=1,
         return u_HPCs, r_HPCs, I_mecs, I_sens, locs
 
 def train(title="", init_grid_space=False):
-    Pre_train_lap_num = 2
-    train_lap_num = 1
+    Pre_train_lap_num = 5
+    train_lap_num = 2
 
     # directory
     directory = f"ratio{config.mec_max_ratio}_"+ title + datetime.datetime.now().strftime("%Y-%m-%d-%H") + "/"
@@ -157,12 +157,12 @@ def train(title="", init_grid_space=False):
         # Coupled_Model.hpc2mec_stre = 1.
         # Coupled_Model.sen2hpc_stre = 1.  # sense比重调大
         # Coupled_Model.mec2hpc_stre = 1.
-        training_func(Coupled_Model, lapnum=2, env=env,
+        training_func(Coupled_Model, lapnum=1.6, env=env,
                       v_abs=0.01, dy=0.01,
                       get_loc=get_loc, get_view=1, train=2, init_by_sen=not init_grid_space,
                       reset_stre=[0., 5., 5.], run_stre=[1., 1., 1.])
         hpc_u, hpc_fr, I_mec, I_sen, loc = testing_func(Coupled_Model=Coupled_Model, env=env,
-                                                        init_get_loc=-1, get_view=1,
+                                                        init_get_loc=1, get_view=1,
                                                         reset_stre=[0., 5., 5.],
                                                         test_traj=False)
         plot_place_data(hpc_u=hpc_u, hpc_fr=hpc_fr, I_mec=I_mec, I_sen=I_sen,
@@ -207,7 +207,7 @@ def train2(title):
                       reset_stre=[0., 5., 5.], run_stre=[1., 1., 1.])
 
     hpc_u, hpc_fr, I_mec, I_sen, loc = testing_func(Coupled_Model=Coupled_Model, env=env,
-                                                    init_get_loc=-1, get_view=1,
+                                                    init_get_loc=0, get_view=1,
                                                     reset_stre=[0., 5., 5.],
                                                     test_traj=False)
     plot_place_data(hpc_u=hpc_u, hpc_fr=hpc_fr, I_mec=I_mec, I_sen=I_sen,
@@ -229,7 +229,7 @@ def train2(title):
                       get_loc=get_loc, get_view=1, train=2, reset=False,
                       reset_stre=[0., 5., 5.], run_stre=[1., 1., 1.])
     hpc_u, hpc_fr, I_mec, I_sen, loc = testing_func(Coupled_Model=Coupled_Model, env=env,
-                                                    init_get_loc=-1, get_view=1,
+                                                    init_get_loc=0, get_view=1,
                                                     reset_stre=[0., 5., 5.],
                                                     test_traj=False)
     plot_place_data(hpc_u=hpc_u, hpc_fr=hpc_fr, I_mec=I_mec, I_sen=I_sen,
@@ -250,13 +250,13 @@ def test(directory, env_step=2, prefix="", load_ckpt=None):
     # Coupled_Model.sen2hpc_stre = 1.
     # Coupled_Model.hpc2mec_stre = 1.
     # Coupled_Model.mec2hpc_stre = 1.
-    init_get_loc = 0
+    init_get_loc = 1
     get_view = 1
 
     hpc_u, hpc_fr, I_mec, I_sen, loc = testing_func(Coupled_Model=Coupled_Model, env=env,
                                                     init_get_loc=init_get_loc, get_view=get_view, reset_stre=[0.,5.,5.],
                                                     test_traj=False)
-    thres = 3.5
+    thres = 5.0
     place_info_path = plot_place_data(hpc_u=hpc_u, hpc_fr=hpc_fr, I_mec=I_mec, I_sen=I_sen,
                                  loc=loc, env=env, step=f"env{env_step}{prefix}", dir=directory, thres=thres)
     print(place_info_path)
@@ -278,8 +278,9 @@ def test(directory, env_step=2, prefix="", load_ckpt=None):
 if __name__ == '__main__':
     with jax.default_device(selected_device):
         # config and env
-        env_step = 1
-        env = Env(env_step)
+        # env_step = 1
+        # env = Env(env_step)
+        env = EnvZhanTing()
         config = ConfigParam()
         bm.set_dt(config.dt)
         Coupled_Model = make_coupled_net(config)
@@ -291,9 +292,10 @@ if __name__ == '__main__':
         # 重新载入旧的sen连接
         # state_dict = bp.checkpoints.load_pytree("./ratio9_lap3_ratio-2024-09-20-11/Coupled_Model_2_env1.bp")
         # Coupled_Model.HPC_model.load_sen_w(state_dict)
-        # train(title="after092011_trad", init_grid_space=True)
+        # train(title="sim_zhanting110_0noise", init_grid_space=True)
         # train2(title="mix_senReset")
-        # test("./ratio9_after0920112024-09-24-22/", env_step=1, prefix="_after2011_pre", load_ckpt="Coupled_Model_1_Prelap3.bp")
+        # TODO 当前train_noise/test_noise=0不合适，init_get_loc=1不合适
+        test("./ratio9_sim_zhanting110_sen12024-10-12-00/", env_step=0, prefix="110_sen1_step1_test0n", load_ckpt="Coupled_Model_2_step1.bp")
         # train(env_step=1)
-        test("./ratio9_lap3_ratio-2024-09-20-11/", env_step=env_step, prefix="pure1", load_ckpt="Coupled_Model_2_env1.bp")
+        # test("./ratio9_lap3_ratio-2024-09-20-11/", env_step=env_step, prefix="pure1", load_ckpt="Coupled_Model_2_env1.bp")
         # test("./ratio9_lap5_2024-09-12-17/", env_step=2)

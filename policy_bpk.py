@@ -99,13 +99,16 @@ class GridPolicy(nn.Module):
         # print("step1", conv_x.shape)
         conv_x = conv_x.reshape(conv_x.shape[0], -1)
         conv_x = self.fc2(conv_x)
-        # print("step2", torch.argmax(conv_x), torch.max(conv_x))
+        if np.random.rand() < 0.004:
+            print("step2", conv_x)
         act_vec = self.actor(conv_x).squeeze()
         values = self.critic(conv_x).squeeze()
         return act_vec, values
 
     def get_actions(self, grid_vector, train=True):
         action_prob, value = self(grid_vector)
+        if not train and np.random.rand() < 0.05:
+            print("check action probs", action_prob)
         if self.action_continue:
             action_mean = action_prob
             cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)

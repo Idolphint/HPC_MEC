@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="ltt@47.95.205.247:22 password (7)" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="v2.5" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
     <option name="confirmBeforeUploading" value="false" />
     <serverData>
       <paths name="agilex@172.17.12.120:22 password">
@@ -113,6 +113,18 @@
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
+        </serverdata>
+      </paths>
+      <paths name="v2.5">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/woosh/neuro_map_nav/HPC_MEC" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="ratio*" />
+            <excludedPath local="true" path="tmp" />
+            <excludedPath local="true" path="log" />
+          </excludedPaths>
         </serverdata>
       </paths>
     </serverData>

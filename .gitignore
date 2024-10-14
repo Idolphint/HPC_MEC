@@ -4,3 +4,6 @@ tmp
 *.gif
 *.bp
 *.pt
+log
+*.pyc
+nohup.out

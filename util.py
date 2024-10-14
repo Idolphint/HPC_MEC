@@ -269,11 +269,11 @@ def draw_nav_traj(traj, traj_grid_code, prefix=""):
         return scatters
 
     # print("begin saving gif")
-    ani = FuncAnimation(fig, update, frames=T, interval=300, blit=True)
+    ani = FuncAnimation(fig, update, frames=T, interval=30, blit=True)
     #
     # # 保存动画为gif文件
     ani_filename = f'./policy_ckpt/test_traj_with_grid_code_{prefix}.gif'
-    ani.save(ani_filename, writer='Pillow', fps=2)
+    ani.save(ani_filename, writer='Pillow', fps=20)
 
 
 def draw_error():

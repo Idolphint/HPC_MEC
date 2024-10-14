@@ -16,7 +16,7 @@ import torch.optim as optim
 from Train import testing_func
 from torch.utils.tensorboard import SummaryWriter
 device = torch.device("cuda:0")
-title = "ppo+cnn+sinL"
+title = "a2c+cnn+relu+pretrain"
 os.makedirs("./log/", exist_ok=True)
 writer = SummaryWriter(log_dir="./log/policy_"+datetime.datetime.now().strftime("%Y-%m-%d-%H")+title)
 
@@ -35,9 +35,16 @@ class CachedGridCode:
         self.locs = bm.as_numpy(locs).copy()
 
     def get_grid_code(self, pos):
-        loc_sim = np.linalg.norm(self.locs - pos, axis=1)
-        g_code = self.u_mecs[np.argmin(loc_sim)]
+        if pos.shape[0]>2:
+            loc_sim = np.linalg.norm(self.locs[:, np.newaxis, :] - pos[np.newaxis, ...], axis=-1) # 1000*n
+            g_code = self.u_mecs[np.argmin(loc_sim, axis=0)]
+        else:
+            loc_sim = np.linalg.norm(self.locs - pos, axis=-1)
+            g_code = self.u_mecs[np.argmin(loc_sim)]
         return g_code
+        # loc_sim = np.linalg.norm(self.locs - pos, axis=1)
+        # g_code = self.u_mecs[np.argmin(loc_sim)]
+        # return g_code
 
 def ready_for_new_env(model, env):
     loc, fea, r, d, _ = env.reset()
@@ -66,7 +73,7 @@ def train(policy_ckpt=None):
     map_model = make_coupled_net(config)
     state_dict = bp.checkpoints.load_pytree(map_model_ckpt_path)  # load the state dict
     bp.load_state(map_model, state_dict)
-    v_abs = 0.02  # TODO 如果和grid code设置不同可能有误差
+    v_abs = 0.03  # TODO 如果和grid code设置不同可能有误差
     grid_code_cache = CachedGridCode(map_model, env)
 
     # 初始化策略模型
@@ -97,9 +104,9 @@ def train(policy_ckpt=None):
     #     return r_mec
     loss_step = 0
     def update():
-        rewards = buffer._discount_rewards(final_value=0, discount=0.99)[:buffer.index]
+        rewards = buffer._discount_rewards(final_value=0, discount=0.95)[:buffer.index]
         old_states, old_actions, old_logp, old_values, gt_diffs = buffer.get_buffer()
-        print(rewards.shape, old_values.shape)
+        print(rewards)
         adv = rewards.detach() - old_values.detach()
         for k in range(10):
             logp, value, dist_entropy, pred_diff = policy.evaluate(old_states, old_actions)
@@ -154,7 +161,7 @@ def train(policy_ckpt=None):
             act = action.detach().cpu().numpy().flatten() if False else action.item()
             loc, fea, reward, done, v_vec = env.step(act, v_abs=v_abs)
             buffer.add_state(state.squeeze(0), done, logp, value, reward, action.detach(), gt_diff)
-            gt_diff = torch.Tensor(env.goal_pos - env.agent_pos).to(device)
+            gt_diff = torch.Tensor(env.goal_pos - loc).to(device)
             # map_model.update(bm.array(v_vec), bm.array(loc), bm.array(fea), get_loc=0, get_view=1, train=0)
             # grid_code_now = map_model.u_mec_module
             # grid_code_now = run_net_policy(1, bm.array(v_vec), bm.array(loc), bm.array(fea), get_view=1)
@@ -172,12 +179,12 @@ def train(policy_ckpt=None):
             # _, _, _, final_value = policy.get_actions(state)
             final_value = torch.zeros(1).to(device)
 
-        # optimizer.zero_grad()
-        # loss = buffer.a2c_loss(final_value, episode_entropy)
-        # loss.backward()
-        # torch.nn.utils.clip_grad_norm(policy.parameters(), max_norm=0.5)
-        # optimizer.step()
-        update()
+        optimizer.zero_grad()
+        loss = buffer.a2c_loss(final_value, episode_entropy)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm(policy.parameters(), max_norm=0.5)
+        optimizer.step()
+        # update()
         loss_step+=1
         buffer.reset_state()
 
@@ -195,7 +202,7 @@ def train(policy_ckpt=None):
 
 def test(grid_code_cache=None, policy=None, test_step_num=10000, draw=False):
     # 初始化建图模型
-    v_abs = 0.02
+    v_abs = 0.03
     # 初始化policy
     if policy is None:
         policy = GridPolicy(device, 0.1, config.num_mec_module).to(device)
