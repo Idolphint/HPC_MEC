@@ -52,11 +52,12 @@ class CachedGridCode:
 
 def train(policy_ckpt=None):
     # 初始化建图模型
-    map_model = make_coupled_net(config)
-    state_dict = bp.checkpoints.load_pytree(map_model_ckpt_path)  # load the state dict
-    bp.load_state(map_model, state_dict)
+    # map_model = make_coupled_net(config)
+    # state_dict = bp.checkpoints.load_pytree(map_model_ckpt_path)  # load the state dict
+    # bp.load_state(map_model, state_dict)
     v_abs = 0.03  # TODO 如果和grid code设置不同可能有误差
-    grid_code_cache = CachedGridCode(map_model, env)
+    # grid_code_cache = CachedGridCode(map_model, env)
+    grid_code_cache = CachedGridCode()
 
     # 初始化策略模型
     policy = GridPolicy(device, 0.90, config.num_mec_module).to(device)
@@ -363,7 +364,7 @@ if __name__ == '__main__':
     config = ConfigParam()
     bm.set_dt(config.dt)
     policy_ckpt = "./policy_ckpt/2024-10-12-13ppo+linear+2Code+loc/best_policy.pt"
-    zhanting_test()
+    # zhanting_test()
     # test(test_step_num=500, draw=True)
-    # train(policy_ckpt)
+    train(policy_ckpt)
     # check_traj_code()

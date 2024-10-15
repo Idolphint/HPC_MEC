@@ -1,5 +1,5 @@
 import sys
-
+import os
 import rospy
 from nav_msgs.msg import Odometry, Path
 from nav_msgs.srv import GetPlan,GetPlanRequest,GetPlanResponse
@@ -11,7 +11,7 @@ import torch
 from env import EnvZhanTing, ConfigParam
 from policy_train_bpk import simply_traj, GridPolicy, CachedGridCode
 device = torch.device('cuda:0')
-
+os.environ["CUDA_LAUNCH_BLOCKING"] = '1.'
 
 class GridNav:
     # 接受ros信息（坐标，goal），返回goal_plan
